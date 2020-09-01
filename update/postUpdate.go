@@ -10,8 +10,8 @@ import (
 
 const update_tpl = "%v was tagged with %v at %v"
 
-func Post(channel string, repo string, tag string, timestamp time.Time) {
-	api := slack.New("")
+func Post(token string, channel string, repo string, tag string, timestamp time.Time) {
+	api := slack.New(token)
 
 	update := fmt.Sprintf(update_tpl, repo, tag, timestamp)
 

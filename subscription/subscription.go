@@ -57,7 +57,7 @@ func initConfig(filePath string) ([]subscription, error) {
 	return subs, nil
 }
 
-func Watch(filepath string) {
+func Watch(filepath string, token string) {
 	fp := gofeed.NewParser()
 
 	subs, err := initConfig(filepath)
@@ -85,7 +85,7 @@ func Watch(filepath string) {
 
 				if feed.Items[0].UpdatedParsed.After(subs[i].lastUpdated) {
 					subs[i].lastUpdated = *feed.Items[0].UpdatedParsed
-					update.Post(subs[i].channel, subs[i].repository, feed.Items[0].Title, subs[i].lastUpdated)
+					update.Post(token, subs[i].channel, subs[i].repository, feed.Items[0].Title, subs[i].lastUpdated)
 					log.Printf("New release of %v: %v at %v\n", subs[i].repository, feed.Items[0].Title, feed.Items[0].UpdatedParsed)
 				}
 			}

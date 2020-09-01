@@ -1,6 +1,9 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"github.com/rtim75/githubToSlack/subscription"
 )
 
@@ -31,5 +34,9 @@ func main() {
 
 	// api.PostMessage(channel.ID, slack.MsgOptionText("hello Ruslan", false))
 	// subscription.Watch()
-	subscription.Watch("subscription_list.yml")
+	token := os.Getenv("SLACK_TOKEN")
+	if token == "" {
+		log.Fatalln("Token is empty")
+	}
+	subscription.Watch("subscription_list.yml", token)
 }
