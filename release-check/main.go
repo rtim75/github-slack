@@ -20,9 +20,15 @@ func handleRequest(ctx context.Context, event events.CloudWatchEvent) error {
 			os.Exit(1)
 		}
 
-		err = updateRepositoryRelease(release.name, release.latestTag, release.released.Unix())
+		changed, err := release.save()
 		if err != nil {
 			os.Exit(1)
+		}
+		if changed {
+			err = release.notify()
+			if err != nil {
+				os.Exit(1)
+			}
 		}
 	}
 	return nil

@@ -7,19 +7,31 @@ provider:
   region: eu-central-1
   profile: personal
   role: !GetAtt lambdaExecutionRole.Arn
+  logRetentionInDays: 7
 
 functions:
   release-checker:
-    handler: bin/check
+    handler: bin/release-check
     events:
       - schedule:
           rate: rate(1 minute)
           enabled: true
     environment:
       REPOSITORIES_TABLE: !Ref repositoriesTable
+      RELEASES_QUEUE_URL: !Ref releasesQueue
+  release-poster:
+    handler: bin/release-post
+    events:
+      - sqs:
+          arn: !GetAtt releasesQueue.Arn
+          enable: true
 
 resources:
   Resources:
+    releasesQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-releases
     repositoriesTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -57,6 +69,13 @@ resources:
                     - 'dynamodb:Scan'
                     - 'dynamodb:PutItem'
                   Resource: !GetAtt repositoriesTable.Arn
+                - Effect: Allow
+                  Action:
+                    - 'sqs:SendMessage'
+                    - 'sqs:ReceiveMessage'
+                    - 'sqs:DeleteMessage'
+                    - 'sqs:GetQueueAttributes'
+                  Resource: !GetAtt releasesQueue.Arn
 
 package:
   exclude:
