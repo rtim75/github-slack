@@ -1,0 +1,38 @@
+service: github-releases-to-slack
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'}
+  runtime: go1.x
+  region: eu-central-1
+  profile: personal
+
+functions:
+  release-checker:
+    handler: bin/check
+    events:
+      - schedule:
+          rate: rate(1 minute)
+          enabled: true
+
+resources:
+  Resources:
+    repositoriesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-repositories
+        AttributeDefinitions:
+          - AttributeName: repository
+            AttributeType: S
+        KeySchema:
+          - AttributeName: repository
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+
+package:
+  exclude:
+    - ./**
+  include:
+    - ./bin/**
