@@ -6,6 +6,7 @@ provider:
   runtime: go1.x
   region: eu-central-1
   profile: personal
+  role: !GetAtt lambdaExecutionRole.Arn
 
 functions:
   release-checker:
@@ -14,6 +15,8 @@ functions:
       - schedule:
           rate: rate(1 minute)
           enabled: true
+    environment:
+      REPOSITORIES_TABLE: !Ref repositoriesTable
 
 resources:
   Resources:
@@ -30,6 +33,30 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 5
           WriteCapacityUnits: 5
+    lambdaExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-${self:provider.stage}-lambda-execution
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: dynamodb
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:Scan'
+                    - 'dynamodb:PutItem'
+                  Resource: !GetAtt repositoriesTable.Arn
 
 package:
   exclude:
