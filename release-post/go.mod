@@ -1,4 +1,4 @@
-module github.com/rtim75/githubToSlack/release-post
+module github.com/rtim75/github-slack/release-post
 
 go 1.15
 

@@ -11,8 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/mmcdole/gofeed"
 )
 
 type repositoryLatestRelease struct {
@@ -21,16 +21,63 @@ type repositoryLatestRelease struct {
 	LatestUpdate time.Time `json:"latestUpdate"`
 }
 
+func getRepositories() ([]repositoryLatestRelease, error) {
+	svc := dynamodb.New(session.New())
+	input := &dynamodb.ScanInput{
+		TableName: aws.String(os.Getenv("REPOSITORIES_TABLE")),
+	}
+	repositories := []repositoryLatestRelease{}
+
+	result, err := svc.Scan(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeProvisionedThroughputExceededException:
+				fmt.Printf("Failed to scan the repositories table: %v %v\n", dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
+			case dynamodb.ErrCodeResourceNotFoundException:
+				fmt.Printf("Failed to scan the repositories table: %v %v\n", dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
+			case dynamodb.ErrCodeRequestLimitExceeded:
+				fmt.Printf("Failed to scan the repositories table: %v %v\n", dynamodb.ErrCodeRequestLimitExceeded, aerr.Error())
+			case dynamodb.ErrCodeInternalServerError:
+				fmt.Printf("Failed to scan the repositories table: %v %v\n", dynamodb.ErrCodeInternalServerError, aerr.Error())
+			default:
+				fmt.Printf("Failed to scan the repositories table: %v\n", aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Printf("Something not predicted happened: %v\n", err.Error())
+		}
+		return nil, err
+	}
+
+	for _, repository := range result.Items {
+		latestTag := "0.0.0"
+		if _, ok := repository["lastTag"]; ok {
+			latestTag = *repository["lastTag"].S
+		}
+
+		lastUpdate := time.Unix(0, 0)
+		if _, ok := repository["lastUpdate"]; ok {
+			tsParsed, err := strconv.ParseInt(*repository["lastUpdate"].N, 10, 64)
+			if err != nil {
+				fmt.Printf("Failed to parse timestamp %v: %v\n", *repository["lastUpdate"].N, err)
+			}
+			lastUpdate = time.Unix(tsParsed, 0)
+		}
+
+		repositories = append(repositories, repositoryLatestRelease{
+			Repository:   *repository["repository"].S,
+			LatestTag:    latestTag,
+			LatestUpdate: lastUpdate,
+		})
+	}
+
+	return repositories, nil
+}
+
 func (release *repositoryLatestRelease) save() (bool, error) {
 	svc := dynamodb.New(session.New())
-
-	cond := expression.Or(expression.AttributeNotExists(expression.Name("lastUpdate")), expression.Name("lastUpdate").LessThan(expression.Value(release.LatestUpdate)))
-	// cond := expression.AttributeNotExists(expression.Name("lastUpdate"))
-	expr, err := expression.NewBuilder().WithCondition(cond).Build()
-	if err != nil {
-		fmt.Printf("Failed to build a condition: %v\n", err)
-		return false, err
-	}
 
 	input := &dynamodb.PutItemInput{
 		Item: map[string]*dynamodb.AttributeValue{
@@ -44,18 +91,15 @@ func (release *repositoryLatestRelease) save() (bool, error) {
 				N: aws.String(strconv.FormatInt(release.LatestUpdate.Unix(), 10)),
 			},
 		},
-		ConditionExpression:       expr.Condition(),
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		TableName:                 aws.String(os.Getenv("REPOSITORIES_TABLE")),
+		TableName: aws.String(os.Getenv("REPOSITORIES_TABLE")),
 	}
 
-	_, err = svc.PutItem(input)
+	_, err := svc.PutItem(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case dynamodb.ErrCodeConditionalCheckFailedException:
-				return false, nil
+				fmt.Printf("Failed to put item: %v %v\n", dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
 			case dynamodb.ErrCodeProvisionedThroughputExceededException:
 				fmt.Printf("Failed to put item: %v %v\n", dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
 			case dynamodb.ErrCodeResourceNotFoundException:
@@ -100,4 +144,24 @@ func (release *repositoryLatestRelease) notify() error {
 	}
 
 	return nil
+}
+
+func (release *repositoryLatestRelease) getLatest() (bool, error) {
+	fp := gofeed.NewParser()
+
+	feed, err := fp.ParseURL("https://" + release.Repository + "/releases.atom")
+	if err != nil {
+		fmt.Printf("Failed to parse feed for %v: %v", release.Repository, err)
+		return false, err
+	}
+
+	if release.LatestTag != feed.Items[0].Title {
+		release.LatestTag = feed.Items[0].Title
+		release.LatestUpdate = *feed.Items[0].UpdatedParsed
+
+		return true, nil
+	}
+
+	return false, nil
+
 }

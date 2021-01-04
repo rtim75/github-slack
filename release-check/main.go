@@ -15,19 +15,21 @@ func handleRequest(ctx context.Context, event events.CloudWatchEvent) error {
 	}
 
 	for i := range repos {
-		release, err := getLatestRelease(repos[i])
+		changed, err := repos[i].getLatest()
 		if err != nil {
 			os.Exit(1)
 		}
 
-		changed, err := release.save()
-		if err != nil {
-			os.Exit(1)
-		}
 		if changed {
-			err = release.notify()
+			changed, err := repos[i].save()
 			if err != nil {
 				os.Exit(1)
+			}
+			if changed {
+				err = repos[i].notify()
+				if err != nil {
+					os.Exit(1)
+				}
 			}
 		}
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func handleRequest(ctx context.Context, event events.SQSEvent) error {
-	fmt.Printf("%v+\n", event)
+	fmt.Printf("%+v\n", event)
 	return nil
 }
 

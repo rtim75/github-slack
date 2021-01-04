@@ -1,4 +1,4 @@
-module github.com/rtim75/githubToSlack/release-check
+module github.com/rtim75/github-slack/release-check
 
 go 1.15
 
