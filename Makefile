@@ -14,7 +14,11 @@ build-release-post:
 	echo "Building release-post"
 	cd release-post && GOOS=linux GOARCH=amd64 CGO_ENABLED=0  go build -o ../bin/release-post
 
-
 deploy:
 	echo "Deploying serverless"
 	serverless deploy -c serverless.yml -s dev
+
+help:
+	echo "build-release-check: Build a realise check binary."
+	echo "build-release-post: Build a realise post binary."
+	echo "deploy: serverless deploy."

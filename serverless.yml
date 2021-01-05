@@ -12,6 +12,9 @@ provider:
 functions:
   release-checker:
     handler: bin/release-check
+    package:
+      exclude: ./**
+      include: ./bin/release-check
     events:
       - schedule:
           rate: rate(1 minute)
@@ -21,6 +24,12 @@ functions:
       RELEASES_QUEUE_URL: !Ref releasesQueue
   release-poster:
     handler: bin/release-post
+    package:
+      exclude: ./**
+      include: ./bin/release-check
+    environment:
+      SLACK_TOKEN_SECRET: /${self:service}/${self:provider.stage}/slack-token
+      RELEASES_QUEUE_URL: !Ref releasesQueue
     events:
       - sqs:
           arn: !GetAtt releasesQueue.Arn
@@ -35,12 +44,12 @@ resources:
     repositoriesTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ${self:service}-${self:provider.stage}-repositories
+        TableName: ${self:service}-${self:provider.stage}
         AttributeDefinitions:
-          - AttributeName: repository
+          - AttributeName: Repository
             AttributeType: S
         KeySchema:
-          - AttributeName: repository
+          - AttributeName: Repository
             KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 5
@@ -68,6 +77,7 @@ resources:
                   Action:
                     - 'dynamodb:Scan'
                     - 'dynamodb:PutItem'
+                    - 'dynamodb:UpdateItem'
                   Resource: !GetAtt repositoriesTable.Arn
                 - Effect: Allow
                   Action:
@@ -76,6 +86,10 @@ resources:
                     - 'sqs:DeleteMessage'
                     - 'sqs:GetQueueAttributes'
                   Resource: !GetAtt releasesQueue.Arn
+                - Effect: Allow
+                  Action:
+                    - 'secretsmanager:GetSecretValue'
+                  Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${self:service}/${self:provider.stage}/slack-token*
 
 package:
   exclude:
